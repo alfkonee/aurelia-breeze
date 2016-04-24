@@ -6,7 +6,7 @@ declare module 'aurelia-breeze' {
   } from 'aurelia-binding';
   import {
     HttpClient
-  } from 'aurelia-http-client';
+  } from 'aurelia-fetch-client';
   export class HttpResponse {
     constructor(aureliaResponse: any, config: any);
     getHeader(headerName: any): any;

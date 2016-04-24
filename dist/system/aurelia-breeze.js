@@ -1,6 +1,6 @@
 'use strict';
 
-System.register(['breeze', 'aurelia-binding', 'aurelia-http-client'], function (_export, _context) {
+System.register(['breeze', 'aurelia-binding', 'aurelia-fetch-client'], function (_export, _context) {
   var breeze, subscriberCollection, ObserverLocator, HttpClient, _dec, _class, _createClass, extend, HttpResponse, AjaxAdapter, Q, Deferred, BreezePropertyObserver, BreezeObjectObserver, BreezeObservationAdapter;
 
   function _classCallCheck(instance, Constructor) {
@@ -71,8 +71,8 @@ System.register(['breeze', 'aurelia-binding', 'aurelia-http-client'], function (
     }, function (_aureliaBinding) {
       subscriberCollection = _aureliaBinding.subscriberCollection;
       ObserverLocator = _aureliaBinding.ObserverLocator;
-    }, function (_aureliaHttpClient) {
-      HttpClient = _aureliaHttpClient.HttpClient;
+    }, function (_aureliaFetchClient) {
+      HttpClient = _aureliaFetchClient.HttpClient;
     }],
     execute: function () {
       _createClass = function () {
@@ -139,7 +139,7 @@ System.register(['breeze', 'aurelia-binding', 'aurelia-http-client'], function (
             success: config.success,
             error: config.error
           };
-          requestInfo.config.request = this.httpClient.createRequest();
+          requestInfo.config.request = this.httpClient;
           requestInfo.config.headers = extend({}, config.headers);
 
           if (breeze.core.isFunction(this.requestInterceptor)) {
@@ -151,35 +151,47 @@ System.register(['breeze', 'aurelia-binding', 'aurelia-http-client'], function (
               return;
             }
           }
+
           config = requestInfo.config;
+          var init = {
+            method: config.type
+          };
 
-          var request = config.request;
-
-          request.withUrl(config.url);
-
-          var method = config.dataType && config.dataType.toLowerCase() === 'jsonp' ? 'jsonp' : config.type.toLowerCase();
-          method = 'as' + method.charAt(0).toUpperCase() + method.slice(1);
-          request[method]();
-
-          request.withParams(config.params);
-
-          if (config.contentType) {
-            request.withHeader('Content-Type', config.contentType);
-          }
+          init.headers = new Headers();
           for (var header in config.headers) {
             if (config.headers.hasOwnProperty(header)) {
-              request.withHeader(header, config.headers[header]);
+              init.headers.append(header, config.headers[header]);
             }
           }
 
           if (config.hasOwnProperty('data')) {
-            request.withContent(config.data);
+            init.body = config.data;
           }
 
-          request.send().then(function (r) {
-            return requestInfo.success(new HttpResponse(r, requestInfo.zConfig));
-          }, function (r) {
-            return requestInfo.error(new HttpResponse(r, requestInfo.zConfig));
+          if (config.contentType) {
+            init.headers.append('Content-Type', config.contentType);
+          }
+
+          var request = new Request(config.url, init);
+
+          requestInfo.config.request.fetch(request).then(function (response) {
+            var responseInput = new HttpResponse(response, requestInfo.zConfig);
+            response.json().then(function (x) {
+              responseInput.data = x;
+              requestInfo.success(responseInput);
+            }).catch(function (err) {
+              responseInput.data = err;
+              requestInfo.error(responseInput);
+            });
+          }, function (response) {
+            var responseInput = new HttpResponse(response, requestInfo.zConfig);
+            response.json().then(function (x) {
+              responseInput.data = x;
+              requestInfo.error(responseInput);
+            }).catch(function (err) {
+              responseInput.data = err;
+              requestInfo.error(responseInput);
+            });
           });
         };
 

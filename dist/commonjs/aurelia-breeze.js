@@ -17,7 +17,7 @@ var _breeze2 = _interopRequireDefault(_breeze);
 
 var _aureliaBinding = require('aurelia-binding');
 
-var _aureliaHttpClient = require('aurelia-http-client');
+var _aureliaFetchClient = require('aurelia-fetch-client');
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -67,7 +67,7 @@ var AjaxAdapter = exports.AjaxAdapter = function () {
       success: config.success,
       error: config.error
     };
-    requestInfo.config.request = this.httpClient.createRequest();
+    requestInfo.config.request = this.httpClient;
     requestInfo.config.headers = extend({}, config.headers);
 
     if (_breeze2.default.core.isFunction(this.requestInterceptor)) {
@@ -79,35 +79,47 @@ var AjaxAdapter = exports.AjaxAdapter = function () {
         return;
       }
     }
+
     config = requestInfo.config;
+    var init = {
+      method: config.type
+    };
 
-    var request = config.request;
-
-    request.withUrl(config.url);
-
-    var method = config.dataType && config.dataType.toLowerCase() === 'jsonp' ? 'jsonp' : config.type.toLowerCase();
-    method = 'as' + method.charAt(0).toUpperCase() + method.slice(1);
-    request[method]();
-
-    request.withParams(config.params);
-
-    if (config.contentType) {
-      request.withHeader('Content-Type', config.contentType);
-    }
+    init.headers = new Headers();
     for (var header in config.headers) {
       if (config.headers.hasOwnProperty(header)) {
-        request.withHeader(header, config.headers[header]);
+        init.headers.append(header, config.headers[header]);
       }
     }
 
     if (config.hasOwnProperty('data')) {
-      request.withContent(config.data);
+      init.body = config.data;
     }
 
-    request.send().then(function (r) {
-      return requestInfo.success(new HttpResponse(r, requestInfo.zConfig));
-    }, function (r) {
-      return requestInfo.error(new HttpResponse(r, requestInfo.zConfig));
+    if (config.contentType) {
+      init.headers.append('Content-Type', config.contentType);
+    }
+
+    var request = new Request(config.url, init);
+
+    requestInfo.config.request.fetch(request).then(function (response) {
+      var responseInput = new HttpResponse(response, requestInfo.zConfig);
+      response.json().then(function (x) {
+        responseInput.data = x;
+        requestInfo.success(responseInput);
+      }).catch(function (err) {
+        responseInput.data = err;
+        requestInfo.error(responseInput);
+      });
+    }, function (response) {
+      var responseInput = new HttpResponse(response, requestInfo.zConfig);
+      response.json().then(function (x) {
+        responseInput.data = x;
+        requestInfo.error(responseInput);
+      }).catch(function (err) {
+        responseInput.data = err;
+        requestInfo.error(responseInput);
+      });
     });
   };
 
@@ -301,6 +313,6 @@ function configure(frameworkConfig) {
 
   var adapter = _breeze2.default.config.initializeAdapterInstance('ajax', 'aurelia', true);
   adapter.setHttpClientFactory(function () {
-    return frameworkConfig.container.get(_aureliaHttpClient.HttpClient);
+    return frameworkConfig.container.get(_aureliaFetchClient.HttpClient);
   });
 }

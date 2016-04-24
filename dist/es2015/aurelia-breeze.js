@@ -2,10 +2,9 @@ var _dec, _class;
 
 import breeze from 'breeze';
 import { subscriberCollection, ObserverLocator } from 'aurelia-binding';
-import { HttpClient } from 'aurelia-http-client';
+import { HttpClient } from 'aurelia-fetch-client';
 
 const extend = breeze.core.extend;
-
 export let HttpResponse = class HttpResponse {
   constructor(aureliaResponse, config) {
     this.config = config;
@@ -46,7 +45,7 @@ export let AjaxAdapter = class AjaxAdapter {
       success: config.success,
       error: config.error
     };
-    requestInfo.config.request = this.httpClient.createRequest();
+    requestInfo.config.request = this.httpClient;
     requestInfo.config.headers = extend({}, config.headers);
 
     if (breeze.core.isFunction(this.requestInterceptor)) {
@@ -58,37 +57,52 @@ export let AjaxAdapter = class AjaxAdapter {
         return;
       }
     }
+
     config = requestInfo.config;
+    let init = {
+      method: config.type
+    };
 
-    let request = config.request;
-
-    request.withUrl(config.url);
-
-    let method = config.dataType && config.dataType.toLowerCase() === 'jsonp' ? 'jsonp' : config.type.toLowerCase();
-    method = 'as' + method.charAt(0).toUpperCase() + method.slice(1);
-    request[method]();
-
-    request.withParams(config.params);
-
-    if (config.contentType) {
-      request.withHeader('Content-Type', config.contentType);
-    }
+    init.headers = new Headers();
     for (let header in config.headers) {
       if (config.headers.hasOwnProperty(header)) {
-        request.withHeader(header, config.headers[header]);
+        init.headers.append(header, config.headers[header]);
       }
     }
 
     if (config.hasOwnProperty('data')) {
-      request.withContent(config.data);
+      init.body = config.data;
     }
 
-    request.send().then(r => requestInfo.success(new HttpResponse(r, requestInfo.zConfig)), r => requestInfo.error(new HttpResponse(r, requestInfo.zConfig)));
+    if (config.contentType) {
+      init.headers.append('Content-Type', config.contentType);
+    }
+
+    let request = new Request(config.url, init);
+
+    requestInfo.config.request.fetch(request).then(response => {
+      var responseInput = new HttpResponse(response, requestInfo.zConfig);
+      response.json().then(x => {
+        responseInput.data = x;
+        requestInfo.success(responseInput);
+      }).catch(err => {
+        responseInput.data = err;
+        requestInfo.error(responseInput);
+      });
+    }, response => {
+      var responseInput = new HttpResponse(response, requestInfo.zConfig);
+      response.json().then(x => {
+        responseInput.data = x;
+        requestInfo.error(responseInput);
+      }).catch(err => {
+        responseInput.data = err;
+        requestInfo.error(responseInput);
+      });
+    });
   }
 };
 
 breeze.config.registerAdapter('ajax', AjaxAdapter);
-
 export let Q = class Q {
   static defer() {
     return new Deferred();
